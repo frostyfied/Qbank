@@ -1,9 +1,14 @@
 import { createContext } from 'react';
-import type { AuthState } from '../../types/auth';
+import type { User } from '../../types/auth';
 
-export interface AuthContextType extends AuthState {
-  login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
+export interface AuthContextType {
+  user: User | null;
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  isPreview: boolean;
+  // UPDATE THESE TWO LINES: Change Promise<void> to Promise<User>
+  login: (email: string, password: string) => Promise<User>;
+  register: (name: string, email: string, password: string) => Promise<User>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
 }

@@ -37,8 +37,13 @@ export const RegisterPage: React.FC = () => {
 
     setIsLoading(true);
     try {
-      await register(name, email, password);
-      navigate('/dashboard/student');
+      const newUser = await register(name, email, password);
+      // Public reg defaults to student, but just in case:
+      if (newUser.role === 'teacher' || newUser.role === 'admin') {
+        navigate(`/dashboard/${newUser.role}`);
+      } else {
+        navigate('/dashboard/student');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed. Please try again.');
     } finally {

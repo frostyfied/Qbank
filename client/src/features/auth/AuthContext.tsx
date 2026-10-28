@@ -10,7 +10,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
-  // Dev preview integration
   const devPreview = useDevPreview();
 
   const refreshSession = useCallback(async () => {
@@ -24,7 +23,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsAuthenticated(false);
       }
     } catch {
-      // Backend offline or 401 unauthenticated
       setUser(null);
       setIsAuthenticated(false);
     } finally {
@@ -68,10 +66,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       setUser(res.user);
       setIsAuthenticated(true);
-      // Disable preview mode if real login succeeds
       if (devPreview.isActive) {
         devPreview.exitPreview();
       }
+      return res.user; // <--- ADDED: Return user for redirect
     } finally {
       setIsLoading(false);
     }
@@ -90,6 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (devPreview.isActive) {
         devPreview.exitPreview();
       }
+      return res.user; // <--- ADDED: Return user for redirect
     } finally {
       setIsLoading(false);
     }
@@ -113,7 +112,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Determine effective user: Real authenticated user takes precedence; otherwise preview user if preview mode is active
   const effectiveUser = isAuthenticated ? user : (devPreview.isActive ? devPreview.previewUser : null);
   const isPreview = !isAuthenticated && devPreview.isActive;
 

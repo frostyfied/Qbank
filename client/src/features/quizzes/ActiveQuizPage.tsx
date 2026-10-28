@@ -34,7 +34,6 @@ const ActiveQuizRunner: React.FC<RunnerProps> = ({ quiz, quizId }) => {
   );
   const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
 
-  // Submit mutation
   const submitMutation = useMutation({
     mutationFn: async () => {
       const formattedAnswers = Object.entries(answers).map(([questionId, userAnswer]) => ({
@@ -50,7 +49,8 @@ const ActiveQuizRunner: React.FC<RunnerProps> = ({ quiz, quizId }) => {
       });
     },
     onSuccess: (data) => {
-      navigate(`/quizzes/${quizId}/results`, { state: { attemptId: data.attemptId } });
+      // Navigate to results page upon finishing
+      navigate(`/quizzes/${quizId}/results`, { state: { attemptId: data.attemptId || quizId } });
     },
   });
 
@@ -76,17 +76,19 @@ const ActiveQuizRunner: React.FC<RunnerProps> = ({ quiz, quizId }) => {
   }, [secondsRemaining, handleSubmitQuiz]);
 
   const currentQ = quiz.questions[currentIndex];
+  // FIX: MongoDB sends _id, not id
+  const qId = (currentQ as any)._id || currentQ.id; 
+  
   const total = quiz.questions.length;
   const answeredCount = Object.keys(answers).length;
   const diffColor = getDifficultyColor(currentQ.difficulty);
 
   const handleAnswerChange = (val: string | boolean) => {
-    setAnswers((prev) => ({ ...prev, [currentQ.id]: val }));
+    setAnswers((prev) => ({ ...prev, [qId]: val }));
   };
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-      {/* Top Session Bar */}
       <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-4">
         <div>
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
@@ -122,14 +124,13 @@ const ActiveQuizRunner: React.FC<RunnerProps> = ({ quiz, quizId }) => {
         </div>
       </div>
 
-      {/* Question Number Pills Navigation */}
       <div className="flex flex-wrap gap-2 p-3 bg-white rounded-xl border border-slate-200/80">
-        {quiz.questions.map((q, idx) => {
-          const isAnswered = answers[q.id] !== undefined;
+        {quiz.questions.map((q: any, idx) => {
+          const isAnswered = answers[q._id || q.id] !== undefined;
           const isCurrent = idx === currentIndex;
           return (
             <button
-              key={q.id}
+              key={q._id || q.id}
               type="button"
               onClick={() => setCurrentIndex(idx)}
               className={`w-9 h-9 rounded-lg text-xs font-bold transition-all ${
@@ -146,11 +147,10 @@ const ActiveQuizRunner: React.FC<RunnerProps> = ({ quiz, quizId }) => {
         })}
       </div>
 
-      {/* Active Question Box */}
       <Card className="border-slate-200">
         <CardHeader className="bg-slate-50/70 border-b border-slate-100 flex flex-row items-center justify-between">
           <div className="flex items-center gap-2">
-            <Badge variant="indigo">{currentQ.subject}</Badge>
+            <Badge variant="indigo">{(currentQ as any).subjectName || 'General'}</Badge>
             <span
               className={`text-[11px] px-2.5 py-0.5 rounded-md border uppercase font-bold ${diffColor.bg} ${diffColor.text} ${diffColor.border}`}
             >
@@ -165,17 +165,16 @@ const ActiveQuizRunner: React.FC<RunnerProps> = ({ quiz, quizId }) => {
 
         <CardContent className="pt-6 space-y-6">
           <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            Topic: {currentQ.topic}
+            Topic: {currentQ.topic || 'General'}
           </div>
           <p className="text-base font-semibold text-slate-900 leading-relaxed">
             {currentQ.text}
           </p>
 
-          {/* Interactive Answer Input per Question Type */}
           {currentQ.type === 'mcq' && currentQ.options && (
             <div className="space-y-2.5 pt-2">
               {currentQ.options.map((opt, i) => {
-                const isSelected = answers[currentQ.id] === opt;
+                const isSelected = answers[qId] === opt; // FIXED
                 return (
                   <button
                     key={i}
@@ -208,7 +207,7 @@ const ActiveQuizRunner: React.FC<RunnerProps> = ({ quiz, quizId }) => {
           {currentQ.type === 'true_false' && (
             <div className="grid grid-cols-2 gap-4 pt-2">
               {[true, false].map((val) => {
-                const isSelected = answers[currentQ.id] === val;
+                const isSelected = answers[qId] === val; // FIXED
                 return (
                   <button
                     key={String(val)}
@@ -234,7 +233,7 @@ const ActiveQuizRunner: React.FC<RunnerProps> = ({ quiz, quizId }) => {
               </label>
               <input
                 type="text"
-                value={(answers[currentQ.id] as string) || ''}
+                value={(answers[qId] as string) || ''} // FIXED
                 onChange={(e) => handleAnswerChange(e.target.value)}
                 placeholder="Enter missing term..."
                 className="w-full max-w-md rounded-lg border border-slate-300 px-3.5 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
@@ -242,41 +241,22 @@ const ActiveQuizRunner: React.FC<RunnerProps> = ({ quiz, quizId }) => {
             </div>
           )}
 
-          {(currentQ.type === 'short_answer' || currentQ.type === 'long_answer') && (
+          {(currentQ.type === 'short_answer' || currentQ.type === 'long_answer' || currentQ.type === 'programming') && (
             <div className="pt-2 space-y-1.5">
               <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide">
-                Written Response (Graded Manually by Teacher)
+                Written Response (Graded Manually)
               </label>
               <textarea
-                rows={currentQ.type === 'long_answer' ? 6 : 3}
-                value={(answers[currentQ.id] as string) || ''}
+                rows={currentQ.type === 'long_answer' || currentQ.type === 'programming' ? 6 : 3}
+                value={(answers[qId] as string) || ''} // FIXED
                 onChange={(e) => handleAnswerChange(e.target.value)}
                 placeholder="Write your answer clearly..."
                 className="w-full rounded-lg border border-slate-300 p-3.5 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
               />
             </div>
           )}
-
-          {currentQ.type === 'programming' && (
-            <div className="pt-2 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide">
-                  Code Submission ({currentQ.programmingLanguage || 'Standard'})
-                </label>
-                <span className="text-[11px] text-slate-400">Manual teacher review</span>
-              </div>
-              <textarea
-                rows={8}
-                value={(answers[currentQ.id] as string) || currentQ.sampleCode || ''}
-                onChange={(e) => handleAnswerChange(e.target.value)}
-                placeholder="// Implement your code here"
-                className="w-full rounded-lg border border-slate-300 p-3.5 font-mono text-xs bg-slate-900 text-slate-100 focus:border-indigo-500"
-              />
-            </div>
-          )}
         </CardContent>
 
-        {/* Footer Navigation */}
         <CardFooter className="justify-between bg-white border-t border-slate-100">
           <Button
             variant="outline"
@@ -310,7 +290,6 @@ const ActiveQuizRunner: React.FC<RunnerProps> = ({ quiz, quizId }) => {
         </CardFooter>
       </Card>
 
-      {/* Submit Confirmation Dialog */}
       <Dialog
         isOpen={confirmSubmitOpen}
         onClose={() => setConfirmSubmitOpen(false)}
@@ -324,9 +303,6 @@ const ActiveQuizRunner: React.FC<RunnerProps> = ({ quiz, quizId }) => {
               <span>You have {total - answeredCount} unanswered questions remaining.</span>
             </div>
           )}
-          <p className="text-xs text-slate-500 leading-relaxed">
-            Auto-graded questions will be scored immediately. Descriptive responses will be queued for teacher grading.
-          </p>
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="outline" size="sm" onClick={() => setConfirmSubmitOpen(false)}>
               Keep Working
@@ -349,7 +325,6 @@ const ActiveQuizRunner: React.FC<RunnerProps> = ({ quiz, quizId }) => {
 export const ActiveQuizPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
 
-  // Fetch quiz session from backend
   const {
     data: quiz,
     isLoading,

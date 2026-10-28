@@ -36,11 +36,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ role = 'student', onLogout, cl
       case 'teacher':
         return [
           { to: '/dashboard/teacher', label: 'Teacher Dashboard', icon: LayoutDashboard },
-          { to: '/questions', label: 'Question Bank', icon: BookOpen },
           { to: '/questions/create', label: 'Create Question', icon: PlusCircle },
           { to: '/questions/review', label: 'Review Submissions', icon: FileCheck2 },
           { to: '/subjects', label: 'Subjects & Topics', icon: FolderTree },
-          { to: '/bookmarks', label: 'My Bookmarks', icon: Bookmark },
+          // Question Bank and Bookmarks REMOVED for teacher
         ];
       case 'student':
       default:
@@ -50,7 +49,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ role = 'student', onLogout, cl
           { to: '/quizzes/setup', label: 'Practice Quiz', icon: CheckSquare },
           { to: '/quizzes/history', label: 'Quiz History', icon: History },
           { to: '/bookmarks', label: 'Bookmarks', icon: Bookmark },
-          { to: '/questions/create', label: 'Submit Question', icon: PlusCircle },
         ];
     }
   };
@@ -68,7 +66,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ role = 'student', onLogout, cl
       className={`w-64 bg-white border-r border-slate-200 flex flex-col justify-between h-full select-none ${className}`}
     >
       <div>
-        {/* Brand Header */}
         <div className="h-16 flex items-center justify-between px-6 border-b border-slate-100">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-sm shadow-indigo-200">
@@ -88,7 +85,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ role = 'student', onLogout, cl
           </Badge>
         </div>
 
-        {/* Navigation Items */}
         <nav className="p-4 space-y-1">
           <div className="px-3 pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
             Menu Navigation
@@ -115,7 +111,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ role = 'student', onLogout, cl
         </nav>
       </div>
 
-      {/* Footer / Account / Logout */}
       <div className="p-4 border-t border-slate-100">
         <button
           type="button"

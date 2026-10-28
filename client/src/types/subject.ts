@@ -1,5 +1,7 @@
+
 export interface Subject {
-  id: string;
+  id?: string;
+  _id?: string;
   name: string;
   code: string;
   semester: number;

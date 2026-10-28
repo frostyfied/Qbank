@@ -1,7 +1,7 @@
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
-import { History, Calendar, Clock, ArrowRight, Award } from 'lucide-react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { Link, useNavigate } from 'react-router-dom';
+import { History, Calendar, ArrowRight, Award, RotateCcw } from 'lucide-react';
 import { apiClient } from '../../lib/api';
 import { API_ENDPOINTS } from '../../lib/endpoints';
 import type { QuizAttempt } from '../../types/quiz';
@@ -11,19 +11,37 @@ import { Card } from '../../components/ui/Card';
 import { LoadingState } from '../../components/feedback/LoadingState';
 import { ErrorState } from '../../components/feedback/ErrorState';
 import { EmptyState } from '../../components/feedback/EmptyState';
-import { formatDate, formatSecondsToTime } from '../../lib/utils';
+import { formatDate } from '../../lib/utils';
 
 export const QuizHistoryPage: React.FC = () => {
+  const navigate = useNavigate();
+
   const {
-    data: attempts = [],
+    data: attemptsResponse,
     isLoading,
     isError,
     error,
     refetch,
-  } = useQuery<QuizAttempt[]>({
+  } = useQuery<{ attempts: QuizAttempt[] }>({
     queryKey: ['quiz-attempts'],
-    queryFn: () => apiClient.get<QuizAttempt[]>(API_ENDPOINTS.quizzes.attempts),
+    queryFn: () => apiClient.get<{ attempts: QuizAttempt[] }>(API_ENDPOINTS.quizzes.attempts),
   });
+
+  // Mutation to instantly redo the quiz with the same parameters
+  const redoMutation = useMutation({
+    mutationFn: async (attempt: any) => {
+      return apiClient.post<{ quizId: string }>(API_ENDPOINTS.quizzes.generate, {
+        subjectId: attempt.subjectId,
+        difficulty: attempt.difficulty,
+        count: attempt.totalQuestions,
+      });
+    },
+    onSuccess: (data) => {
+      navigate(`/quizzes/${data.quizId}`);
+    },
+  });
+
+  const attempts = attemptsResponse?.attempts || [];
 
   return (
     <div className="space-y-6">
@@ -46,7 +64,7 @@ export const QuizHistoryPage: React.FC = () => {
       {isError && (
         <ErrorState
           title="History Records Unavailable"
-          message={error instanceof Error ? error.message : 'Unable to retrieve quiz history from the backend.'}
+          message={error instanceof Error ? error.message : 'Unable to retrieve quiz history.'}
           onRetry={() => refetch()}
         />
       )}
@@ -63,12 +81,13 @@ export const QuizHistoryPage: React.FC = () => {
 
       {!isLoading && !isError && attempts.length > 0 && (
         <div className="space-y-3">
-          {attempts.map((att) => {
+          {attempts.map((att: any) => {
             const isPending = att.overallGradingStatus === 'pending_manual_grading';
+            const attId = att._id || att.id;
 
             return (
               <Card
-                key={att.id}
+                key={attId}
                 className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-slate-300 transition-colors"
               >
                 <div className="flex items-center gap-4">
@@ -88,15 +107,12 @@ export const QuizHistoryPage: React.FC = () => {
                       <span className="flex items-center gap-1">
                         <Calendar className="w-3.5 h-3.5" /> {formatDate(att.submittedAt)}
                       </span>
-                      <span className="flex items-center gap-1 font-mono">
-                        <Clock className="w-3.5 h-3.5" /> {formatSecondsToTime(att.durationSecondsTaken)}
-                      </span>
                       <span>{att.totalQuestions} Questions</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between sm:justify-end gap-6 border-t sm:border-t-0 pt-3 sm:pt-0">
+                <div className="flex items-center justify-between sm:justify-end gap-3 border-t sm:border-t-0 pt-3 sm:pt-0">
                   <div className="text-right">
                     <span className="block text-base font-extrabold text-slate-900">
                       {att.score} / {att.maxScore}
@@ -105,11 +121,22 @@ export const QuizHistoryPage: React.FC = () => {
                       {Math.round(att.percentage)}%
                     </span>
                   </div>
-                  <Link to={`/quizzes/${att.id}/results`} state={{ attemptId: att.id }}>
-                    <Button variant="outline" size="sm" rightIcon={<ArrowRight className="w-4 h-4" />}>
-                      Review
+                  <div className="flex items-center gap-2">
+                    <Link to={`/quizzes/${attId}/results`} state={{ attemptId: attId }}>
+                      <Button variant="outline" size="sm" rightIcon={<ArrowRight className="w-4 h-4" />}>
+                        Review
+                      </Button>
+                    </Link>
+                    <Button 
+                      variant="primary" 
+                      size="sm" 
+                      leftIcon={<RotateCcw className="w-4 h-4" />}
+                      onClick={() => redoMutation.mutate(att)}
+                      isLoading={redoMutation.isPending}
+                    >
+                      Redo Quiz
                     </Button>
-                  </Link>
+                  </div>
                 </div>
               </Card>
             );

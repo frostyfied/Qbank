@@ -11,10 +11,12 @@ export type QuestionDifficulty = 'easy' | 'medium' | 'hard';
 export type QuestionStatus = 'pending' | 'approved' | 'rejected' | 'published';
 
 export interface BaseQuestion {
-  id: string;
+  id?: string;          // Made optional because backend uses _id
+  _id?: string;         // ADDED: MongoDB unique identifier
   text: string;
   type: QuestionType;
-  subject: string;
+  subject?: string;     // Made optional (kept for backwards compatibility)
+  subjectName?: string; // ADDED: What your backend actually sends
   topic: string;
   semester: number;
   difficulty: QuestionDifficulty;

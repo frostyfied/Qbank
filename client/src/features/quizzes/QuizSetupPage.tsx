@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Play, Clock, AlertCircle } from 'lucide-react';
+import { Play, AlertCircle } from 'lucide-react';
 import { apiClient } from '../../lib/api';
 import { API_ENDPOINTS } from '../../lib/endpoints';
 import type { Subject } from '../../types/subject';
@@ -18,14 +18,13 @@ export const QuizSetupPage: React.FC = () => {
   const [difficulty, setDifficulty] = useState<QuestionDifficulty | 'all'>('all');
   const [questionType, setQuestionType] = useState<QuestionType | 'all'>('all');
   const [count, setCount] = useState<number>(5);
-  const [timed, setTimed] = useState<boolean>(true);
-  const [timeLimit, setTimeLimit] = useState<number>(10); // minutes
 
-  // Fetch subjects
-  const { data: subjects = [] } = useQuery<Subject[]>({
+  const { data: subjectsData } = useQuery<Subject[]>({
     queryKey: ['subjects'],
     queryFn: () => apiClient.get<Subject[]>(API_ENDPOINTS.subjects.list),
   });
+
+  const safeSubjects = Array.isArray(subjectsData) ? subjectsData : [];
 
   const generateQuizMutation = useMutation({
     mutationFn: async () => {
@@ -34,8 +33,6 @@ export const QuizSetupPage: React.FC = () => {
         difficulty: difficulty !== 'all' ? difficulty : undefined,
         type: questionType !== 'all' ? questionType : undefined,
         count: Number(count),
-        timed,
-        timeLimitMinutes: timed ? Number(timeLimit) : undefined,
       });
     },
     onSuccess: (data) => {
@@ -70,7 +67,7 @@ export const QuizSetupPage: React.FC = () => {
                 <span>
                   {generateQuizMutation.error instanceof Error
                     ? generateQuizMutation.error.message
-                    : 'Failed to generate quiz. Please ensure the backend is available.'}
+                    : 'Failed to generate quiz.'}
                 </span>
               </div>
             )}
@@ -82,7 +79,7 @@ export const QuizSetupPage: React.FC = () => {
               placeholder="Any Subject (Broad Revision)"
               options={[
                 { value: '', label: 'All Subjects (Comprehensive)' },
-                ...subjects.map((s) => ({ value: s.name, label: s.name })),
+                ...safeSubjects.map((s) => ({ value: s.name, label: s.name })),
               ]}
             />
 
@@ -115,7 +112,7 @@ export const QuizSetupPage: React.FC = () => {
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <Input
                 label="Question Count"
                 type="number"
@@ -125,55 +122,7 @@ export const QuizSetupPage: React.FC = () => {
                 onChange={(e) => setCount(Number(e.target.value))}
                 helperText="Select between 3 and 30 questions"
               />
-
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide">
-                  Timing Mode
-                </label>
-                <div className="flex items-center gap-4 pt-2">
-                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-800 cursor-pointer">
-                    <input
-                      type="radio"
-                      checked={timed}
-                      onChange={() => setTimed(true)}
-                      className="w-4 h-4 text-indigo-600"
-                    />
-                    Timed Mode
-                  </label>
-                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-800 cursor-pointer">
-                    <input
-                      type="radio"
-                      checked={!timed}
-                      onChange={() => setTimed(false)}
-                      className="w-4 h-4 text-indigo-600"
-                    />
-                    Untimed (Relaxed)
-                  </label>
-                </div>
-              </div>
             </div>
-
-            {timed && (
-              <div className="p-4 rounded-xl bg-indigo-50/60 border border-indigo-100 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs text-indigo-900">
-                  <Clock className="w-4 h-4 text-indigo-600" />
-                  <span>Time Limit Duration:</span>
-                </div>
-                <div className="w-32">
-                  <Select
-                    value={timeLimit}
-                    onChange={(e) => setTimeLimit(Number(e.target.value))}
-                    options={[
-                      { value: 5, label: '5 Minutes' },
-                      { value: 10, label: '10 Minutes' },
-                      { value: 15, label: '15 Minutes' },
-                      { value: 20, label: '20 Minutes' },
-                      { value: 30, label: '30 Minutes' },
-                    ]}
-                  />
-                </div>
-              </div>
-            )}
 
             <div className="pt-4 border-t border-slate-100 flex justify-end">
               <Button

@@ -28,8 +28,17 @@ export const LoginPage: React.FC = () => {
 
     setIsLoading(true);
     try {
-      await login(email, password);
-      navigate('/dashboard/student');
+      // Capture the returned user
+      const loggedInUser = await login(email, password);
+      
+      // Redirect based on actual role
+      if (loggedInUser.role === 'admin') {
+        navigate('/dashboard/admin');
+      } else if (loggedInUser.role === 'teacher') {
+        navigate('/dashboard/teacher');
+      } else {
+        navigate('/dashboard/student');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Invalid credentials or connection failure.');
     } finally {
@@ -57,7 +66,6 @@ export const LoginPage: React.FC = () => {
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4 sm:px-0 space-y-6">
-        {/* Main Login Card */}
         <div className="bg-white py-8 px-6 sm:px-10 shadow-sm border border-slate-200/80 rounded-2xl">
           <form className="space-y-4" onSubmit={handleSubmit}>
             {error && (
@@ -110,7 +118,6 @@ export const LoginPage: React.FC = () => {
           </div>
         </div>
 
-        {/* ⭐️ DEVELOPMENT-ONLY PREVIEW MODE BOX (Rendered only when enabled in DEV) */}
         {devPreview.isAvailable && (
           <div className="bg-amber-50/70 border border-amber-200/90 rounded-2xl p-5 shadow-xs">
             <div className="flex items-center gap-2 mb-2">

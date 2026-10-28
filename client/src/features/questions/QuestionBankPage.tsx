@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Filter, RotateCcw, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Filter, RotateCcw, Plus, ChevronLeft, ChevronRight, BookOpen, Layers, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { apiClient } from '../../lib/api';
 import { API_ENDPOINTS } from '../../lib/endpoints';
@@ -10,6 +10,7 @@ import { QuestionCard } from './QuestionCard';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
+import { Badge } from '../../components/ui/Badge';
 import { LoadingState } from '../../components/feedback/LoadingState';
 import { ErrorState } from '../../components/feedback/ErrorState';
 import { EmptyState } from '../../components/feedback/EmptyState';
@@ -38,14 +39,17 @@ export const QuestionBankPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const limit = 8;
 
-  // Query subjects for the dropdown
-  const { data: subjectsData } = useQuery<Subject[]>({
+  const isStudent = user?.role === 'student';
+
+  // Fetch subjects
+  const { data: subjectsData, isLoading: isLoadingSubjects } = useQuery<Subject[]>({
     queryKey: ['subjects'],
     queryFn: () => apiClient.get<Subject[]>(API_ENDPOINTS.subjects.list),
     retry: 0,
   });
 
-  // Query questions
+  const safeSubjects = Array.isArray(subjectsData) ? subjectsData : [];
+
   const queryParams = {
     page,
     limit,
@@ -56,6 +60,9 @@ export const QuestionBankPage: React.FC = () => {
     type: questionType !== 'all' ? questionType : undefined,
   };
 
+  // Fetch questions (only if a subject is selected, or searching, OR if user is teacher/admin)
+  const isReadyToFetch = !isStudent || Boolean(subject) || Boolean(search.trim());
+
   const {
     data: questionsData,
     isLoading,
@@ -65,9 +72,9 @@ export const QuestionBankPage: React.FC = () => {
   } = useQuery<QuestionsApiResponse>({
     queryKey: ['questions', queryParams],
     queryFn: () => apiClient.get<QuestionsApiResponse>(API_ENDPOINTS.questions.list, queryParams),
+    enabled: isReadyToFetch,
   });
 
-  // Bookmark mutation
   const bookmarkMutation = useMutation({
     mutationFn: async ({ id, currentlyBookmarked }: { id: string; currentlyBookmarked: boolean }) => {
       if (currentlyBookmarked) {
@@ -81,7 +88,6 @@ export const QuestionBankPage: React.FC = () => {
     },
   });
 
-  // Delete mutation (for teachers/admins)
   const deleteMutation = useMutation({
     mutationFn: (id: string) => apiClient.delete(API_ENDPOINTS.questions.delete(id)),
     onSuccess: () => {
@@ -102,21 +108,93 @@ export const QuestionBankPage: React.FC = () => {
   const pagination = questionsData?.pagination || { total: 0, page: 1, totalPages: 1 };
   const canManage = user?.role === 'teacher' || user?.role === 'admin';
 
-  return (
-    <div className="space-y-6">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+  // ---------------------------------------------------------
+  // VIEW 1: STUDENT SUBJECT GRID (Curriculum View)
+  // ---------------------------------------------------------
+  if (isStudent && !subject && !search.trim()) {
+    return (
+      <div className="space-y-6 max-w-5xl mx-auto">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight">Question Bank</h2>
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight">Curriculum & Subjects</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Browse verified academic questions across semesters and disciplines
+            Select a subject to browse its specific question bank and start studying.
           </p>
         </div>
-        <Link to="/questions/create">
-          <Button variant="primary" size="sm" leftIcon={<Plus className="w-4 h-4" />}>
-            {user?.role === 'student' ? 'Submit Question' : 'Author Question'}
-          </Button>
-        </Link>
+
+        {isLoadingSubjects ? (
+          <LoadingState type="card" count={4} />
+        ) : safeSubjects.length === 0 ? (
+          <EmptyState title="No Subjects Found" description="There are no subjects available in the system yet." />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {safeSubjects.map((s) => (
+              <button
+                key={s._id}
+                onClick={() => setSubject(s.name)}
+                className="text-left bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs hover:border-indigo-300 hover:shadow-md transition-all group flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <Badge variant="indigo" className="font-mono">{s.code}</Badge>
+                    <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">Sem {s.semester}</span>
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900 mb-2 group-hover:text-indigo-600 transition-colors">
+                    {s.name}
+                  </h3>
+                  <p className="text-xs text-slate-500 line-clamp-2 mb-4">
+                    {s.description || 'No description provided for this course.'}
+                  </p>
+                </div>
+                <div className="flex items-center justify-between pt-4 border-t border-slate-100 mt-auto">
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    {s.topics?.length || 0} Topics
+                  </span>
+                  <span className="text-xs font-bold text-indigo-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                    View Questions <ArrowRight className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------
+  // VIEW 2: QUESTION BANK LIST (For Teachers, or after Student selects a subject)
+  // ---------------------------------------------------------
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          {isStudent && subject ? (
+            <div className="flex items-center gap-3">
+              <Button variant="outline" size="sm" onClick={() => setSubject('')} leftIcon={<ChevronLeft className="w-4 h-4" />}>
+                Back to Subjects
+              </Button>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900 tracking-tight">{subject}</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Showing questions for this subject</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <h2 className="text-xl font-bold text-slate-900 tracking-tight">Question Bank</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Manage and browse academic questions across semesters and disciplines
+              </p>
+            </>
+          )}
+        </div>
+        
+        {canManage && (
+          <Link to="/questions/create">
+            <Button variant="primary" size="sm" leftIcon={<Plus className="w-4 h-4" />}>
+              Author Question
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* Filter Toolbar */}
@@ -132,18 +210,21 @@ export const QuestionBankPage: React.FC = () => {
             leftIcon={<Search className="w-4 h-4" />}
           />
 
-          <Select
-            placeholder="All Subjects"
-            value={subject}
-            onChange={(e) => {
-              setSubject(e.target.value);
-              setPage(1);
-            }}
-            options={[
-              { value: '', label: 'All Subjects' },
-              ...(subjectsData || []).map((s) => ({ value: s.name, label: s.name })),
-            ]}
-          />
+          {/* Only show Subject dropdown for Teachers (Students are locked to the selected subject) */}
+          {!isStudent && (
+            <Select
+              placeholder="All Subjects"
+              value={subject}
+              onChange={(e) => {
+                setSubject(e.target.value);
+                setPage(1);
+              }}
+              options={[
+                { value: '', label: 'All Subjects' },
+                ...safeSubjects.map((s) => ({ value: s.name, label: s.name })),
+              ]}
+            />
+          )}
 
           <Select
             value={difficulty}
@@ -180,9 +261,7 @@ export const QuestionBankPage: React.FC = () => {
         <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
           <div className="flex items-center gap-2 text-slate-500">
             <Filter className="w-3.5 h-3.5" />
-            <span>
-              Showing {questions.length} of {pagination.total} questions
-            </span>
+            <span>Showing {questions.length} of {pagination.total} questions</span>
           </div>
           <button
             type="button"
@@ -195,7 +274,6 @@ export const QuestionBankPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Content Feed */}
       {isLoading && <LoadingState type="card" count={4} />}
 
       {isError && (
@@ -209,22 +287,18 @@ export const QuestionBankPage: React.FC = () => {
       {!isLoading && !isError && questions.length === 0 && (
         <EmptyState
           title="No Questions Found"
-          description={
-            search || subject || difficulty !== 'all' || questionType !== 'all'
-              ? 'No questions matched your search criteria. Try loosening your filters.'
-              : 'The question bank is currently empty. Authors can create and publish verified questions.'
-          }
-          actionLabel={search || subject ? 'Clear Filters' : 'Author First Question'}
-          onAction={search || subject ? handleResetFilters : undefined}
+          description="No questions matched your search criteria. Try loosening your filters."
+          actionLabel="Clear Filters"
+          onAction={handleResetFilters}
         />
       )}
 
       {!isLoading && !isError && questions.length > 0 && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-4">
-            {questions.map((q) => (
+            {questions.map((q: any) => (
               <QuestionCard
-                key={q.id}
+                key={q._id || q.id}
                 question={q}
                 canManage={canManage}
                 onBookmarkToggle={(id, cur) => bookmarkMutation.mutate({ id, currentlyBookmarked: cur })}

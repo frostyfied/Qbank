@@ -1,225 +1,153 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FolderTree, Plus, Layers } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ChevronLeft, Edit3, Trash2, Layers, ArrowRight, Plus } from 'lucide-react';
 import { apiClient } from '../../lib/api';
 import { API_ENDPOINTS } from '../../lib/endpoints';
 import type { Subject } from '../../types/subject';
-import { useAuth } from '../auth/useAuth';
-import { Button } from '../../components/ui/Button';
+import type { Question } from '../../types/question';
+import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
-import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
-import { Dialog } from '../../components/ui/Dialog';
-import { Input } from '../../components/ui/Input';
-import { Select } from '../../components/ui/Select';
-import { Textarea } from '../../components/ui/Textarea';
+import { Button } from '../../components/ui/Button';
 import { LoadingState } from '../../components/feedback/LoadingState';
-import { ErrorState } from '../../components/feedback/ErrorState';
 import { EmptyState } from '../../components/feedback/EmptyState';
 
 export const SubjectListPage: React.FC = () => {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
 
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [code, setCode] = useState('');
-  const [semester, setSemester] = useState<number>(1);
-  const [description, setDescription] = useState('');
-  const [topicsString, setTopicsString] = useState('');
-
-  const {
-    data: subjects = [],
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useQuery<Subject[]>({
+  // Fetch Subjects
+  const { data: subjectsData, isLoading: isLoadingSubjects } = useQuery<Subject[]>({
     queryKey: ['subjects'],
     queryFn: () => apiClient.get<Subject[]>(API_ENDPOINTS.subjects.list),
   });
 
-  const createSubjectMutation = useMutation({
-    mutationFn: async () => {
-      const parsedTopics = topicsString
-        .split(',')
-        .map((t) => t.trim())
-        .filter(Boolean);
+  // Fetch Questions (Only when a subject is clicked)
+  const { data: questionsData, isLoading: isLoadingQuestions } = useQuery<{ questions: Question[] }>({
+    queryKey: ['questions', selectedSubject?.name],
+    queryFn: () => apiClient.get<{ questions: Question[] }>(API_ENDPOINTS.questions.list, { subject: selectedSubject?.name, limit: 100 }),
+    enabled: !!selectedSubject,
+  });
 
-      return apiClient.post(API_ENDPOINTS.subjects.create, {
-        name,
-        code,
-        semester: Number(semester),
-        description,
-        topics: parsedTopics,
-      });
-    },
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiClient.delete(API_ENDPOINTS.questions.delete(id)),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['subjects'] });
-      setDialogOpen(false);
-      setName('');
-      setCode('');
-      setDescription('');
-      setTopicsString('');
+      queryClient.invalidateQueries({ queryKey: ['questions'] });
     },
   });
 
-  const handleCreateSubject = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name || !code) return;
-    createSubjectMutation.mutate();
-  };
+  const safeSubjects = Array.isArray(subjectsData) ? subjectsData : [];
+  const questions = questionsData?.questions || [];
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight">Academic Curriculum & Subjects</h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Browse subjects, course modules, and syllabus topics mapped to the question bank
-          </p>
+  if (isLoadingSubjects) return <LoadingState type="card" count={4} />;
+
+  // VIEW 1: The Grid
+  if (!selectedSubject) {
+    return (
+      <div className="space-y-6 max-w-5xl mx-auto">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900 tracking-tight">Academic Curriculum & Subjects</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Browse subjects, course modules, and syllabus topics mapped to the question bank.</p>
+          </div>
+          <Link to="/questions/create">
+            <Button variant="primary" size="sm" leftIcon={<Plus className="w-4 h-4" />}>Author Question</Button>
+          </Link>
         </div>
-        {isAdmin && (
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setDialogOpen(true)}
-            leftIcon={<Plus className="w-4 h-4" />}
-          >
-            Create Subject Module
-          </Button>
-        )}
-      </div>
-
-      {isLoading && <LoadingState type="card" count={3} />}
-
-      {isError && (
-        <ErrorState
-          title="Subjects Unavailable"
-          message={error instanceof Error ? error.message : 'Unable to retrieve subject curriculum.'}
-          onRetry={() => refetch()}
-        />
-      )}
-
-      {!isLoading && !isError && subjects.length === 0 && (
-        <EmptyState
-          icon={<FolderTree className="w-8 h-8 text-slate-400" />}
-          title="No Subjects Registered"
-          description="The curriculum catalog is currently empty. Administrators can add subjects and topics."
-          actionLabel={isAdmin ? 'Add First Subject' : undefined}
-          onAction={isAdmin ? () => setDialogOpen(true) : undefined}
-        />
-      )}
-
-      {!isLoading && !isError && subjects.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {subjects.map((sub) => (
-            <Card key={sub.id} className="border-slate-200/90 hover:border-slate-300">
-              <CardHeader className="bg-slate-50/70 border-b border-slate-100 flex flex-row items-center justify-between pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 font-bold text-xs">
-                    {sub.code.slice(0, 3)}
+        
+        {safeSubjects.length === 0 ? (
+          <EmptyState title="No Subjects Found" description="There are no subjects available yet." />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {safeSubjects.map((s) => (
+              <div 
+                key={s._id} 
+                onClick={() => setSelectedSubject(s)}
+                className="text-left bg-white rounded-xl border border-slate-200 hover:border-indigo-400 hover:shadow-md transition-all group flex flex-col justify-between overflow-hidden cursor-pointer"
+              >
+                <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="indigo">{s.code.slice(0, 2)}</Badge>
+                    <Badge variant="slate" className="font-mono text-[10px]">{s.code}</Badge>
                   </div>
-                  <Badge variant="indigo" size="sm">
-                    {sub.code}
-                  </Badge>
+                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">SEM {s.semester}</span>
                 </div>
-                <Badge variant="sky" size="sm">
-                  Sem {sub.semester}
-                </Badge>
-              </CardHeader>
-
-              <CardContent className="pt-4 space-y-3">
-                <CardTitle className="text-base text-slate-900">{sub.name}</CardTitle>
-                {sub.description && (
-                  <p className="text-xs text-slate-500 leading-relaxed line-clamp-2">
-                    {sub.description}
-                  </p>
-                )}
-
-                <div>
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                    <Layers className="w-3.5 h-3.5" />
-                    <span>Topics ({sub.topics.length})</span>
+                <div className="p-5 flex-1">
+                  <h3 className="text-base font-bold text-slate-900 mb-3 group-hover:text-indigo-600 transition-colors">{s.name}</h3>
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wide">
+                    <Layers className="w-3.5 h-3.5" /> Topics ({s.topics?.length || 0})
                   </div>
-                  <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
-                    {sub.topics.map((top) => (
-                      <span
-                        key={top}
-                        className="text-[11px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-medium border border-slate-200/60"
-                      >
-                        {top}
-                      </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {s.topics?.slice(0, 3).map((t: string) => (
+                      <span key={t} className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-medium">{t}</span>
                     ))}
                   </div>
                 </div>
-              </CardContent>
+                <div className="p-3 bg-slate-50 border-t border-slate-100 flex justify-end">
+                   <span className="text-xs font-bold text-indigo-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                      View Questions <ArrowRight className="w-3.5 h-3.5" />
+                   </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // VIEW 2: Questions inside the clicked subject
+  return (
+    <div className="space-y-6 max-w-5xl mx-auto">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="sm" onClick={() => setSelectedSubject(null)} leftIcon={<ChevronLeft className="w-4 h-4" />}>
+            Back
+          </Button>
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">{selectedSubject.name}</h2>
+            <p className="text-xs text-slate-500">Managing {questions.length} questions</p>
+          </div>
+        </div>
+        <Link to="/questions/create">
+          <Button variant="primary" size="sm">Create New Question Here</Button>
+        </Link>
+      </div>
+
+      {isLoadingQuestions ? (
+        <LoadingState type="card" count={3} />
+      ) : questions.length === 0 ? (
+        <EmptyState title="No Questions Yet" description="You haven't created any questions for this subject." />
+      ) : (
+        <div className="space-y-3">
+          {questions.map((q: any) => (
+            <Card key={q._id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Badge variant="slate">{q.type.toUpperCase()}</Badge>
+                  <Badge variant={q.difficulty === 'easy' ? 'emerald' : q.difficulty === 'medium' ? 'amber' : 'rose'}>{q.difficulty}</Badge>
+                  <span className="text-xs text-slate-400 font-medium">Topic: {q.topic}</span>
+                </div>
+                <p className="text-sm font-semibold text-slate-900">{q.text}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Link to={`/questions/${q._id}/edit`}>
+                  <Button variant="outline" size="sm" leftIcon={<Edit3 className="w-3.5 h-3.5" />}>Edit</Button>
+                </Link>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="text-rose-600 border-rose-200 hover:bg-rose-50"
+                  onClick={() => { if(window.confirm('Delete this question permanently?')) deleteMutation.mutate(q._id); }}
+                  leftIcon={<Trash2 className="w-3.5 h-3.5" />}
+                >
+                  Delete
+                </Button>
+              </div>
             </Card>
           ))}
         </div>
       )}
-
-      {/* Admin Create Subject Modal */}
-      <Dialog
-        isOpen={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        title="Register New Subject Module"
-        description="Add a curriculum discipline and list its associated topic areas."
-      >
-        <form onSubmit={handleCreateSubject} className="space-y-4 pt-2">
-          <Input
-            label="Subject Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g., Computer Networks"
-            required
-          />
-
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="Course Code"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="e.g., CS304"
-              required
-            />
-
-            <Select
-              label="Semester"
-              value={semester}
-              onChange={(e) => setSemester(Number(e.target.value))}
-              options={[1, 2, 3, 4, 5, 6, 7, 8].map((s) => ({
-                value: s,
-                label: `Semester ${s}`,
-              }))}
-            />
-          </div>
-
-          <Textarea
-            label="Description"
-            rows={2}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Brief scope of the subject module..."
-          />
-
-          <Input
-            label="Topic Modules (comma-separated)"
-            value={topicsString}
-            onChange={(e) => setTopicsString(e.target.value)}
-            placeholder="OSI Model, TCP/IP, Routing Protocols, DNS"
-          />
-
-          <div className="flex justify-end gap-3 pt-3">
-            <Button variant="outline" size="sm" type="button" onClick={() => setDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" size="sm" type="submit" isLoading={createSubjectMutation.isPending}>
-              Create Subject
-            </Button>
-          </div>
-        </form>
-      </Dialog>
     </div>
   );
 };

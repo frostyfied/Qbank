@@ -1,7 +1,7 @@
 import React from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Calendar, Award, BookOpen, Layers } from 'lucide-react';
+import { ArrowLeft, Calendar, Award, BookOpen, Layers, CheckCircle2, Info } from 'lucide-react';
 import { apiClient } from '../../lib/api';
 import { API_ENDPOINTS } from '../../lib/endpoints';
 import type { Question } from '../../types/question';
@@ -16,16 +16,18 @@ export const QuestionDetailPage: React.FC = () => {
   const navigate = useNavigate();
 
   const {
-    data: question,
+    data: questionResponse,
     isLoading,
     isError,
     error,
     refetch,
-  } = useQuery<Question>({
+  } = useQuery<{ question: Question }>({
     queryKey: ['question', id],
-    queryFn: () => apiClient.get<Question>(API_ENDPOINTS.questions.detail(id!)),
+    queryFn: () => apiClient.get<{ question: Question }>(API_ENDPOINTS.questions.detail(id!)),
     enabled: !!id,
   });
+
+  const question = questionResponse?.question;
 
   if (isLoading) return <LoadingState type="card" count={1} />;
 
@@ -50,6 +52,11 @@ export const QuestionDetailPage: React.FC = () => {
   }
 
   const diffColor = getDifficultyColor(question.difficulty);
+  const displaySubject = question.subjectName || (question as any).subject || 'General';
+  const correctAnswer = (question as any).correctAnswer;
+  
+  // Hide demo-seed tags
+  const displayTags = (question.tags || []).filter(t => !t.includes('demo-seed'));
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -64,7 +71,7 @@ export const QuestionDetailPage: React.FC = () => {
           Back to Question Bank
         </Button>
         <div className="flex items-center gap-2">
-          <Badge variant="indigo">{question.subject}</Badge>
+          <Badge variant="indigo">{displaySubject}</Badge>
           <span
             className={`text-xs px-2.5 py-0.5 rounded-md border uppercase font-bold ${diffColor.bg} ${diffColor.text} ${diffColor.border}`}
           >
@@ -80,7 +87,7 @@ export const QuestionDetailPage: React.FC = () => {
           <div className="flex items-center gap-4 text-xs text-slate-500">
             <span className="flex items-center gap-1.5 font-medium">
               <Layers className="w-4 h-4 text-indigo-500" />
-              Topic: <strong className="text-slate-800">{question.topic}</strong>
+              Topic: <strong className="text-slate-800">{question.topic || 'General'}</strong>
             </span>
             <span className="flex items-center gap-1.5 font-medium">
               <BookOpen className="w-4 h-4 text-sky-500" />
@@ -105,59 +112,38 @@ export const QuestionDetailPage: React.FC = () => {
             </p>
           </div>
 
-          {/* Type-Specific Content */}
-          {question.type === 'mcq' && question.options && (
-            <div className="space-y-3 pt-2">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                Options
+          {/* PROMINENT ANSWER BOX */}
+          {correctAnswer && ['mcq', 'true_false', 'fill_blank'].includes(question.type) && (
+            <div className="p-5 rounded-xl bg-emerald-500 shadow-sm space-y-1">
+              <h4 className="text-xs font-bold text-emerald-100 uppercase tracking-wider flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4" /> Correct Answer
               </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {question.options.map((opt, i) => (
-                  <div
-                    key={i}
-                    className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-700 flex items-center gap-3"
-                  >
-                    <span className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center justify-center font-bold text-xs shrink-0">
-                      {String.fromCharCode(65 + i)}
-                    </span>
-                    <span>{opt}</span>
-                  </div>
-                ))}
-              </div>
+              <p className="text-xl font-bold text-white tracking-wide">
+                {String(correctAnswer)}
+              </p>
             </div>
           )}
 
-          {question.type === 'programming' && question.sampleCode && (
-            <div className="space-y-2 pt-2">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                Starter Code Template
-              </h4>
-              <pre className="p-4 bg-slate-900 text-slate-100 rounded-xl font-mono text-xs overflow-x-auto leading-relaxed">
-                {question.sampleCode}
-              </pre>
-            </div>
-          )}
-
-          {/* Explanation */}
+          {/* Detailed Explanation Box */}
           {question.explanation && (
-            <div className="p-5 rounded-xl bg-indigo-50/70 border border-indigo-100 space-y-1.5">
-              <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wider">
-                Reference Solution & Explanation
+            <div className="p-5 rounded-xl bg-indigo-50/70 border border-indigo-100 space-y-2">
+              <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
+                <Info className="w-4 h-4" /> Explanation
               </h4>
-              <p className="text-xs text-indigo-950/80 leading-relaxed">
+              <p className="text-sm text-indigo-950/90 leading-relaxed">
                 {question.explanation}
               </p>
             </div>
           )}
 
           {/* Tags */}
-          {question.tags && question.tags.length > 0 && (
+          {displayTags.length > 0 && (
             <div className="pt-2">
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                 Classification Tags
               </h4>
               <div className="flex flex-wrap gap-1.5">
-                {question.tags.map((tag) => (
+                {displayTags.map((tag) => (
                   <span
                     key={tag}
                     className="text-xs px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 font-mono"
